@@ -147,3 +147,4 @@ void thread_sleep(int64_t wakeup_tick);
 void thread_wakeup(int64_t ticks);
 
 void thread_test_yield(void); /* Test the current thread to see if it should out of CPU. */
+bool thread_cmp_priority (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);

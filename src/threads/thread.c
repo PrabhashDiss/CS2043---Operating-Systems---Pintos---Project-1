@@ -332,7 +332,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur -> elem, (list_less_func *) &thread_cmp_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -678,4 +678,15 @@ thread_test_yield(void)
     if ((thread_current() -> priority) < (ft -> priority))
       thread_yield();
   }
+}
+
+/* compare priority */
+bool
+thread_cmp_priority (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED)
+{
+    const struct thread *a = list_entry (a_, struct thread, elem);
+    const struct thread *b = list_entry (b_, struct thread, elem);
+
+    return a->priority > b->priority;
 }
