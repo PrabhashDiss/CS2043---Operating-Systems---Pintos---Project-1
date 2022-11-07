@@ -173,6 +173,20 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
 
+  if (thread_mlfqs)
+  {
+    thread_current ()->recent_cpu = FP_ADD_MIX (thread_current ()->recent_cpu, 1);
+    if (ticks % TIMER_FREQ == 0) /* do this every second */
+      {
+        thread_calculate_load_avg ();
+        thread_calculate_recent_cpu_for_all ();
+      }
+    if (ticks % 4 == 3)
+      {
+        thread_calculate_priority_for_all ();
+      }
+  }
+
   thread_wakeup(ticks);
 }
 

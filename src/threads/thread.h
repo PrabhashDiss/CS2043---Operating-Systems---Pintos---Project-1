@@ -5,6 +5,8 @@
 #include <list.h>
 #include <stdint.h>
 
+#include "fixed-point.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -24,6 +26,10 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+#define NICE_MAX 20
+#define NICE_DEFAULT 0
+#define NICE_MIN -20
 
 /* A kernel thread or user process.
 
@@ -103,11 +109,15 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
 
     int64_t wakeup_tick;
+    struct list_elem sleepelem;
 
     struct lock *waiting_lock;  /* for deal with the priority donation */
     struct list donation_list;
     struct list_elem donation_list_elem;    /* for the elements in donation_list */
     int temp_priority;	/* for thread_set_priority(), like a cach */
+
+    fp_t nice;                           /* nice value of a thread */
+    fp_t recent_cpu;                     /* recent cpu usage of a thread */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -156,3 +166,9 @@ bool thread_cmp_priority (const struct list_elem *a_, const struct list_elem *b_
 void thread_update_priority (void); /* Update the thread priority. */
 void thread_remove_lock (struct lock *lock); /* Remove lock from donation_list. */
 void thread_donate_priority(void); /* Donate the priority (priority inheritance). */
+
+void thread_calculate_recent_cpu (struct thread *t);
+void thread_calculate_recent_cpu_for_all (void);
+void thread_calculate_load_avg (void);
+void thread_calculate_priority (struct thread *t);
+void thread_calculate_priority_for_all (void);
