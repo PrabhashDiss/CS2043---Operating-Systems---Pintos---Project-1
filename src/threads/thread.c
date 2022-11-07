@@ -175,6 +175,8 @@ thread_create (const char *name, int priority,
   struct switch_threads_frame *sf;
   tid_t tid;
 
+  enum intr_level old_level;
+
   ASSERT (function != NULL);
 
   /* Allocate thread. */
@@ -185,6 +187,8 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+  old_level = intr_disable();
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -201,8 +205,25 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  intr_set_level(old_level);
+
   /* Add to run queue. */
   thread_unblock (t);
+
+  /*
+   * Testing whether the current thread (the one that called thread_create())
+   * should donate (give) the  CPU space to the new thread.
+   *
+   * Because thread_create() created the new thread before calling thread unblock().
+   * If the priority of the new thread is higher than that of the current thread (the one called thread_create()),
+   * the current thread should donate (give) the CPU space to the new thread.
+   *
+   * Thus, by calling thread_test_yield() here,
+   * we should compare the new thread priority to the current priority.
+   */
+  old_level = intr_disable();
+  thread_test_yield();
+  intr_set_level(old_level);
 
   return tid;
 }
@@ -338,7 +359,24 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  enum intr_level old_level;
+  int old_priority;
+  old_level = intr_disable();
+
+  /* save the current thread priority */
+  old_priority = thread_current() -> priority;
+
+  /* give the new priority to the current thread priority */
+  thread_current() -> priority = new_priority;
+
+  /*
+   * If the current thread priority is lower than the old priority,
+   * it need to test whether the current thread need to out the CPU.
+   */
+  if (old_priority > thread_current() -> priority)
+    thread_test_yield();
+
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
@@ -628,5 +666,16 @@ thread_wakeup(int64_t ticks) {
       list_remove (temp);
     }
     else e = list_next (e);
+  }
+}
+
+void
+thread_test_yield(void)
+{
+  if (!list_empty(&ready_list))
+  {
+    struct thread *ft = list_entry(list_front(&ready_list), struct thread, elem);
+    if ((thread_current() -> priority) < (ft -> priority))
+      thread_yield();
   }
 }
