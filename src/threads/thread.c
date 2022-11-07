@@ -367,8 +367,18 @@ thread_set_priority (int new_priority)
   old_priority = thread_current() -> priority;
 
   /* give the new priority to the current thread priority */
-  thread_current() -> priority = new_priority;
+  thread_current() -> temp_priority = new_priority;
 
+  /* update current thread priority */
+  thread_update_priority();
+
+  /*
+   * If the current thread priority is higher than the previous thread priority,
+   * it needs to donate their priority.
+   */
+  if (old_priority < thread_current() -> priority)
+    thread_donate_priority();
+  
   /*
    * If the current thread priority is lower than the old priority,
    * it need to test whether the current thread need to out the CPU.
@@ -383,6 +393,10 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
+  enum intr_level old_level;
+  old_level = intr_disable();
+  intr_set_level(old_level);
+
   return thread_current ()->priority;
 }
 
@@ -492,8 +506,6 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
-  enum intr_level old_level;
-
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
@@ -505,9 +517,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  old_level = intr_disable ();
+  t -> waiting_lock = NULL;
+  list_init(&t -> donation_list);
+  t -> temp_priority = priority;
+
   list_push_back (&all_list, &t->allelem);
-  intr_set_level (old_level);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -669,6 +683,7 @@ thread_wakeup(int64_t ticks) {
   }
 }
 
+/* Test the current thread to see if it should out of CPU. */
 void
 thread_test_yield(void)
 {
@@ -689,4 +704,60 @@ thread_cmp_priority (const struct list_elem *a_, const struct list_elem *b_,
     const struct thread *b = list_entry (b_, struct thread, elem);
 
     return a->priority > b->priority;
+}
+
+/* Update the thread priority. */
+void
+thread_update_priority (void)
+{
+  struct thread *ct = thread_current(); /* current thread */
+  ct -> priority = ct -> temp_priority;
+
+  if (!list_empty(&ct -> donation_list))
+  {
+    struct thread *ft = list_entry(list_front(&ct -> donation_list), struct thread, donation_list_elem); /* new thread */
+
+    /*
+      * The current thread priority cannot lower than the front thread in
+      * donation_list.
+      *
+      * It means that the current thread priority is greater than or equal to the front thread
+      * priority in donation_list.
+      */
+    if ((ft -> priority) > (ct -> priority))
+      ct -> priority = ft -> priority;
+  }
+}
+
+/* Remove lock from donation_list. */
+void
+thread_remove_lock (struct lock *lock)
+{
+  struct list_elem *e;
+  struct thread *t;
+  for (e = list_begin(&thread_current() -> donation_list); e != list_end(&thread_current() -> donation_list); e = list_next(e))
+  {
+    t = list_entry(e, struct thread, donation_list_elem);
+
+    if (t -> waiting_lock == lock)
+      list_remove(e);
+  }
+}
+
+/* donate the priority (priority inheritance) */
+void
+thread_donate_priority(void)
+{
+  struct thread *t = thread_current(); /* get current thread */
+  struct lock *l = t -> waiting_lock; /* current thread waiting lock */
+
+  /* when lock and lock holder are exist */
+  while (l && l -> holder) {
+    /* if the priority of the lock-holding thread is not higher than or equal to the current thread priority */
+    if (l -> holder -> priority < t -> priority) {
+      l -> holder -> priority = t -> priority;
+
+      l = l -> holder -> waiting_lock;
+    }
+  }
 }

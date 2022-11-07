@@ -103,6 +103,11 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
 
     int64_t wakeup_tick;
+
+    struct lock *waiting_lock;  /* for deal with the priority donation */
+    struct list donation_list;
+    struct list_elem donation_list_elem;    /* for the elements in donation_list */
+    int temp_priority;	/* for thread_set_priority(), like a cach */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -148,3 +153,6 @@ void thread_wakeup(int64_t ticks);
 
 void thread_test_yield(void); /* Test the current thread to see if it should out of CPU. */
 bool thread_cmp_priority (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+void thread_update_priority (void); /* Update the thread priority. */
+void thread_remove_lock (struct lock *lock); /* Remove lock from donation_list. */
+void thread_donate_priority(void); /* Donate the priority (priority inheritance). */
