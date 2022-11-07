@@ -10,6 +10,7 @@ enum thread_status
   {
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
+    THREAD_SLEEPING,	   /* New state for sleeping threads */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING        /* About to be destroyed. */
   };
@@ -100,6 +101,8 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    int64_t wakeup_tick;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -139,3 +142,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 #endif /* threads/thread.h */
+
+void thread_sleep(int64_t wakeup_tick);
+void thread_wakeup(int64_t ticks);
